@@ -84,3 +84,80 @@ def agregar_carrito(id):
 
     conn.close()
     return redirect(url_for('index'))
+
+
+# Ruta para agregar productos (CRUD)
+@app.route('/agregar', methods=['GET', 'POST'])
+def agregar():
+    if request.method == 'POST':
+        nombre = request.form['nombre']
+        descripcion = request.form['descripcion']
+        precio = float(request.form['precio'])
+        unidades = int(request.form['unidades'])
+
+        # Manejar la subida de la imagen
+        imagen = request.files['imagen']
+        if imagen and imagen.filename != '':
+            imagen_path = os.path.join(app.config['UPLOAD_FOLDER'], imagen.filename)
+            imagen.save(imagen_path)
+            imagen_url = f"uploads/{imagen.filename}"  # Ruta relativa para guardar en la base de datos
+        else:
+            imagen_url = "uploads/default.png"  # Imagen por defecto si no se sube ninguna
+
+        conn = get_db_connection()
+        conn.execute(
+            'INSERT INTO productos (nombre, descripcion, precio, imagen, unidades) VALUES (?, ?, ?, ?, ?)',
+            (nombre, descripcion, precio, imagen_url, unidades)
+        )
+        conn.commit()
+        conn.close()
+        return redirect(url_for('index'))
+    return render_template('agregar.html')
+
+
+# Editar productos
+@app.route('/editar/<int:id>', methods=['GET', 'POST'])
+def editar(id):
+    conn = get_db_connection()
+    producto = conn.execute('SELECT * FROM productos WHERE id = ?', (id,)).fetchone()
+    if request.method == 'POST':
+        nombre = request.form['nombre']
+        descripcion = request.form['descripcion']
+        precio = float(request.form['precio'])
+        imagen = request.form['imagen']
+        unidades = int(request.form['unidades'])
+
+        conn.execute(
+            'UPDATE productos SET nombre = ?, descripcion = ?, precio = ?, imagen = ?, unidades = ? WHERE id = ?',
+            (nombre, descripcion, precio, imagen, unidades, id)
+        )
+        conn.commit()
+        conn.close()
+        return redirect(url_for('index'))
+    conn.close()
+    return render_template('editar.html', producto=producto)
+
+
+# Ruta para buscar productos
+@app.route('/buscar', methods=['GET', 'POST'])
+def buscar():
+    if request.method == 'POST':
+        termino = request.form['termino']  # Obtener el término de búsqueda desde el formulario
+        conn = get_db_connection()
+        # Consulta SQL para buscar por nombre o descripción
+        productos = conn.execute(
+            'SELECT * FROM productos WHERE nombre LIKE ? OR descripcion LIKE ?',
+            (f'%{termino}%', f'%{termino}%')  # Usar el término de búsqueda con % para la coincidencia parcial
+        ).fetchall()
+        conn.close()
+        # Renderizar la plantilla con los productos encontrados
+        return render_template('index.html', productos=productos)
+    return redirect(url_for('index'))
+
+@app.route('/quienes_somos')
+def quienes_somos():
+    return render_template('quienes_somos.html')
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
