@@ -85,6 +85,46 @@ def agregar_carrito(id):
     conn.close()
     return redirect(url_for('index'))
 
+# Ruta para la página de ver.html, donde los productos son agregados al carrito
+@app.route('/ver', methods=['GET', 'POST'])
+def ver():
+    if request.method == 'POST':
+        # Aquí se deberían tomar los productos de la compra, en este ejemplo es una lista estática.
+        productos = [
+            {'nombre': 'Producto 1', 'precio': 10, 'cantidad': 2},
+            {'nombre': 'Producto 2', 'precio': 5, 'cantidad': 3}
+        ]
+        # Guardamos la lista de productos en la sesión
+        session['carrito'] = productos
+        # Redirigimos a la página de facturación
+        return redirect('/facturacion')
+
+    # Si es un GET, solo mostramos la página de ver.html
+    return render_template('ver.html')
+
+# Ver carrito de compras
+@app.route('/ver_carrito')
+def ver_carrito():
+    total = sum(item['precio'] for item in session.get('carrito', []))
+    return render_template('ver.html', carrito=session.get('carrito', []), total=total)
+
+
+# Eliminar producto del carrito
+@app.route('/eliminar_carrito/<int:id>')
+def eliminar_carrito(id):
+    if 'carrito' in session:
+        for item in session['carrito']:
+            if item['id'] == id:
+                session['carrito'].remove(item)
+                session.modified = True
+                # Devolver unidad al inventario
+                conn = get_db_connection()
+                conn.execute('UPDATE productos SET unidades = unidades + 1 WHERE id = ?', (id,))
+                conn.commit()
+                conn.close()
+                break
+    return redirect(url_for('ver_carrito'))
+
 
 # Ruta para agregar productos (CRUD)
 @app.route('/agregar', methods=['GET', 'POST'])
@@ -138,6 +178,45 @@ def editar(id):
     return render_template('editar.html', producto=producto)
 
 
+# Facturación: Formulario de usuario y carrito
+@app.route('/formulario', methods=['GET', 'POST'])
+def formulario():
+    if request.method == 'POST':
+        nombre = request.form['nombre']
+        apellido = request.form['apellido']
+        fecha = request.form['fecha']
+        total = sum(item['precio'] for item in session.get('carrito', []))
+        return render_template('facturacion.html', nombre=nombre, apellido=apellido, fecha=fecha,
+                               carrito=session.get('carrito', []), total=total)
+    return render_template('formulario.html')
+
+
+# Ruta de la página de facturación
+@app.route('/facturacion', methods=['GET', 'POST'])
+def facturacion():
+    if request.method == 'POST':
+        # Obtener los datos del formulario (nombre, apellido, fecha)
+        nombre = request.form.get('nombre')
+        apellido = request.form.get('apellido')
+        fecha = request.form.get('fecha')
+
+        # Recuperar el carrito de la sesión
+        carrito = session.get('carrito', [])
+
+        # Si el carrito está vacío, redirigimos a la página de ver.html
+        if not carrito:
+            return redirect('/ver')
+
+        # Calcular el total
+        total = sum(item['precio'] * item['cantidad'] for item in carrito)
+
+        # Pasar los datos al template
+        return render_template('facturacion.html', nombre=nombre, apellido=apellido, fecha=fecha, carrito=carrito, total=total)
+
+    # Si es un GET, redirigir a formulario.html para que el usuario ingrese los datos
+    return render_template('formulario.html')
+
+
 # Ruta para buscar productos
 @app.route('/buscar', methods=['GET', 'POST'])
 def buscar():
@@ -161,3 +240,4 @@ def quienes_somos():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
